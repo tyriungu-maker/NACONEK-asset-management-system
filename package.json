@@ -12,11 +12,16 @@
     "type-check": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "node prisma/seed.js",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"commonjs\"} prisma/seed.ts"
   },
   "dependencies": {
     "next": "^15.0.0",
@@ -70,6 +75,7 @@
     "tailwindcss-animate": "^1.0.7",
     "prisma": "^5.7.0",
     "@prisma/internals": "^5.7.0",
+    "ts-node": "^10.9.1",
     "eslint": "^8.54.0",
     "eslint-config-next": "15.0.0",
     "prettier": "^3.1.0",
