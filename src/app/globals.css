@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 3.6%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 3.6%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 3.6%;
+  --muted: 0 0% 96.1%;
+  --muted-foreground: 0 0% 45.1%;
+  --accent: 38.66 92.86% 50.98%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 89.8%;
+  --input: 0 0% 89.8%;
+  --ring: 38.66 92.86% 50.98%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 0 0% 3.6%;
+  --foreground: 0 0% 98.2%;
+  --card: 0 0% 8.5%;
+  --card-foreground: 0 0% 98.2%;
+  --popover: 0 0% 8.5%;
+  --popover-foreground: 0 0% 98.2%;
+  --muted: 0 0% 14.9%;
+  --muted-foreground: 0 0% 63.9%;
+  --accent: 38.66 92.86% 50.98%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98.2%;
+  --border: 0 0% 14.9%;
+  --input: 0 0% 14.9%;
+  --ring: 38.66 92.86% 50.98%;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground;
+}
+
+/* Smooth transitions */
+@layer base {
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+/* NACONEK Custom Styles */
+.naconek-gold {
+  color: #c9a227;
+}
+
+.naconek-gold-bg {
+  background-color: #c9a227;
+}
+
+.naconek-gold-dark {
+  color: #5a3e1b;
+}
+
+.naconek-green {
+  color: #6b7a2f;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
