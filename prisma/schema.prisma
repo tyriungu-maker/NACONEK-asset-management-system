@@ -1,0 +1,913 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// AUTHENTICATION & AUTHORIZATION
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  password      String?
+  phone         String?
+  image         String?
+  mfaEnabled    Boolean   @default(false)
+  mfaSecret     String?
+  active        Boolean   @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  role          Role      @relation(fields: [roleId], references: [id])
+  roleId        String
+  accounts      Account[]
+  sessions      Session[]
+  auditLogs     ActivityLog[]
+  auditAssignments AuditAssignment[]
+  verificationAssignments VerificationAssignment[]
+
+  @@index([roleId])
+  @@index([email])
+  @@index([active])
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================================
+// ROLES & PERMISSIONS
+// ============================================================================
+
+model Role {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@index([name])
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  category    String  // asset, audit, report, admin, user, etc.
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@index([category])
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  role         Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId       String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+// ============================================================================
+// ORGANIZATION & LOCATIONS
+// ============================================================================
+
+model Region {
+  id          String  @id @default(cuid())
+  code        String  @unique // NRB, GRS, WJR, MDR, TRK, ISL, MRS, SAM, KJL, BSA, LKP, TNT
+  name        String
+  description String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  counties           County[]
+  assets             Asset[]
+  auditCampaigns     AuditCampaign[]
+  auditAssignments   AuditAssignment[]
+
+  @@index([code])
+  @@index([active])
+}
+
+model County {
+  id        String  @id @default(cuid())
+  name      String
+  code      String
+  region    Region  @relation(fields: [regionId], references: [id])
+  regionId  String
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locations                Location[]
+  assets                   Asset[]
+  verificationCampaigns    VerificationCampaign[]
+
+  @@unique([regionId, code])
+  @@index([regionId])
+  @@index([active])
+}
+
+model Department {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  locations Location[]
+  assets    Asset[]
+
+  @@index([name])
+  @@index([active])
+}
+
+model Location {
+  id           String  @id @default(cuid())
+  name         String
+  locationType String  // HQ, REGIONAL_OFFICE, COUNTY_OFFICE, LEARNING_CENTRE, SCHOOL, MOBILE_UNIT, WAREHOUSE, ICT_CENTRE, FIELD_OFFICE
+  address      String?
+  county       County  @relation(fields: [countyId], references: [id])
+  countyId     String
+  department   Department @relation(fields: [departmentId], references: [id])
+  departmentId String
+  latitude     Float?
+  longitude    Float?
+  active       Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assets                   Asset[]
+  auditAssignments         AuditAssignment[]
+  verificationSessions     VerificationSession[]
+
+  @@index([countyId])
+  @@index([departmentId])
+  @@index([locationType])
+  @@index([active])
+}
+
+// ============================================================================
+// ASSET MANAGEMENT
+// ============================================================================
+
+model AssetCategory {
+  id          String  @id @default(cuid())
+  code        String  @unique // ICT, NET, PRT, FUR, VEH, SOL, UPS, SEC, OFF, MED, LIB
+  name        String
+  description String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  subcategories AssetSubcategory[]
+  assets        Asset[]
+
+  @@index([code])
+  @@index([active])
+}
+
+model AssetSubcategory {
+  id         String  @id @default(cuid())
+  code       String
+  name       String
+  category   AssetCategory @relation(fields: [categoryId], references: [id])
+  categoryId String
+  active     Boolean @default(true)
+  createdAt  DateTime @default(now())
+
+  assets Asset[]
+
+  @@unique([categoryId, code])
+  @@index([categoryId])
+  @@index([active])
+}
+
+model Supplier {
+  id          String  @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  contact     String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assets               Asset[]
+  maintenanceRecords   MaintenanceRecord[]
+
+  @@index([name])
+  @@index([active])
+}
+
+model Asset {
+  id              String  @id @default(cuid())
+  assetTag        String  @unique  // NACONEK-NRB-ICT-00001
+  barcode         String? @unique
+  qrCode          String? @unique
+  name            String
+  description     String?
+  
+  // Physical Details
+  manufacturer    String?
+  model           String?
+  serialNumber    String? @unique
+  condition       String  @default("good") // good, fair, poor, damaged
+  status          String  @default("active") // active, inactive, maintenance, disposed, lost, missing
+  
+  // Financial Details
+  purchaseDate    DateTime
+  purchaseCost    Float
+  currentValue    Float
+  fundingSource   String?
+  
+  // Relationships
+  category        AssetCategory @relation(fields: [categoryId], references: [id])
+  categoryId      String
+  subcategory     AssetSubcategory @relation(fields: [subcategoryId], references: [id])
+  subcategoryId   String
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  supplierId      String?
+  region          Region @relation(fields: [regionId], references: [id])
+  regionId        String
+  county          County @relation(fields: [countyId], references: [id])
+  countyId        String
+  department      Department @relation(fields: [departmentId], references: [id])
+  departmentId    String
+  location        Location @relation(fields: [locationId], references: [id])
+  locationId      String
+  
+  // Custodian & Warranty
+  custodian       String?
+  custodianEmail  String?
+  warrantyExpiry  DateTime?
+  
+  // Media & Documents
+  images          AssetImage[]
+  documents       AssetDocument[]
+  
+  // Related Records
+  tags            AssetTag[]
+  transfers       AssetTransfer[]
+  maintenanceRecords MaintenanceRecord[]
+  depreciationRecords DepreciationRecord[]
+  auditRecords    AuditRecord[]
+  verificationFindings VerificationFinding[]
+  retaggingRequests RetaggingRequest[]
+  missingAssetCases MissingAssetCase[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([assetTag])
+  @@index([categoryId])
+  @@index([regionId])
+  @@index([countyId])
+  @@index([departmentId])
+  @@index([locationId])
+  @@index([status])
+  @@index([condition])
+  @@index([createdAt])
+}
+
+model AssetTag {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId         String
+  tagType         String  // qr, barcode, nfc
+  tagValue        String
+  issuedDate      DateTime @default(now())
+  expiryDate      DateTime?
+  status          String  @default("active") // active, retired, replaced
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([assetId, tagType])
+  @@index([assetId])
+  @@index([tagValue])
+  @@index([status])
+}
+
+model AssetImage {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId         String
+  url             String
+  caption         String?
+  uploadedAt      DateTime @default(now())
+
+  @@index([assetId])
+}
+
+model AssetDocument {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId         String
+  documentType    String  // warranty, receipt, manual, certificate, etc.
+  url             String
+  fileName        String
+  fileSize        Int?
+  uploadedAt      DateTime @default(now())
+
+  @@index([assetId])
+  @@index([documentType])
+}
+
+// ============================================================================
+// AUDIT MANAGEMENT
+// ============================================================================
+
+model AuditCampaign {
+  id              String  @id @default(cuid())
+  name            String
+  description     String?
+  campaignType    String  // annual, quarterly, regional, department, surprise
+  region          Region? @relation(fields: [regionId], references: [id])
+  regionId        String?
+  status          String  @default("draft") // draft, scheduled, active, paused, completed, archived
+  
+  startDate       DateTime
+  endDate         DateTime?
+  
+  totalAssets     Int     @default(0)
+  assetsVerified  Int     @default(0)
+  assetsFound     Int     @default(0)
+  assetsMissing   Int     @default(0)
+  
+  assignments     AuditAssignment[]
+  records         AuditRecord[]
+  findings        AuditFinding[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([campaignType])
+  @@index([regionId])
+  @@index([createdAt])
+}
+
+model AuditAssignment {
+  id              String  @id @default(cuid())
+  campaign        AuditCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId      String
+  auditor         User    @relation(fields: [auditorId], references: [id])
+  auditorId       String
+  location        Location @relation(fields: [locationId], references: [id])
+  locationId      String
+  region          Region  @relation(fields: [regionId], references: [id])
+  regionId        String
+  
+  assetsToAudit   Int     @default(0)
+  assetsVerified  Int     @default(0)
+  status          String  @default("pending") // pending, in_progress, completed
+  
+  assignedDate    DateTime @default(now())
+  completedDate   DateTime?
+  
+  records         AuditRecord[]
+
+  @@unique([campaignId, auditorId, locationId])
+  @@index([campaignId])
+  @@index([auditorId])
+  @@index([locationId])
+  @@index([status])
+}
+
+model AuditRecord {
+  id              String  @id @default(cuid())
+  campaign        AuditCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId      String
+  assignment      AuditAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId    String
+  asset           Asset   @relation(fields: [assetId], references: [id])
+  assetId         String
+  
+  status          String  // verified, missing, lost, damaged, retag_required, relocated, disposed, maintenance
+  notes           String?
+  photoUrl        String?
+  photosJson      String? @db.Text // JSON array of photo URLs
+  
+  auditedDate     DateTime @default(now())
+  auditedBy       String?  // Auditor name or ID
+  
+  findings        AuditFinding[]
+
+  @@index([campaignId])
+  @@index([assignmentId])
+  @@index([assetId])
+  @@index([status])
+  @@index([auditedDate])
+}
+
+model AuditFinding {
+  id              String  @id @default(cuid())
+  campaign        AuditCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId      String
+  record          AuditRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  recordId        String
+  
+  findingType     String  // missing, damaged, condition_issue, location_mismatch, etc.
+  description     String
+  severity        String  @default("medium") // low, medium, high, critical
+  
+  reviewStatus    String  @default("pending") // pending, reviewed, approved, resolved
+  resolution      String?
+  resolvedDate    DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([recordId])
+  @@index([severity])
+  @@index([reviewStatus])
+}
+
+// ============================================================================
+// VERIFICATION CAMPAIGNS
+// ============================================================================
+
+model VerificationCampaign {
+  id              String  @id @default(cuid())
+  name            String
+  description     String?
+  county          County? @relation(fields: [countyId], references: [id])
+  countyId        String?
+  
+  status          String  @default("draft") // draft, scheduled, active, paused, completed, archived
+  
+  startDate       DateTime
+  endDate         DateTime?
+  
+  totalAssets     Int     @default(0)
+  assetsVerified  Int     @default(0)
+  
+  assignments     VerificationAssignment[]
+  sessions        VerificationSession[]
+  findings        VerificationFinding[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([countyId])
+  @@index([createdAt])
+}
+
+model VerificationAssignment {
+  id              String  @id @default(cuid())
+  campaign        VerificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId      String
+  auditor         User    @relation(fields: [auditorId], references: [id])
+  auditorId       String
+  
+  assetsToVerify  Int
+  assetsVerified  Int     @default(0)
+  status          String  @default("pending")
+  
+  assignedDate    DateTime @default(now())
+  completedDate   DateTime?
+  
+  sessions        VerificationSession[]
+
+  @@unique([campaignId, auditorId])
+  @@index([campaignId])
+  @@index([auditorId])
+  @@index([status])
+}
+
+model VerificationSession {
+  id              String  @id @default(cuid())
+  assignment      VerificationAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId    String
+  location        Location @relation(fields: [locationId], references: [id])
+  locationId      String
+  campaign        VerificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId      String
+  
+  startTime       DateTime @default(now())
+  endTime         DateTime?
+  status          String  @default("in_progress") // in_progress, completed
+  notes           String?
+  
+  findings        VerificationFinding[]
+  photos          VerificationPhoto[]
+  gpsLogs         VerificationGpsLog[]
+
+  @@index([assignmentId])
+  @@index([locationId])
+  @@index([campaignId])
+  @@index([status])
+}
+
+model VerificationFinding {
+  id              String  @id @default(cuid())
+  session         VerificationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId       String
+  asset           Asset   @relation(fields: [assetId], references: [id])
+  assetId         String
+  campaign        VerificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId      String
+  
+  status          String  // verified, missing, damaged, retag_required, relocated
+  notes           String?
+  photoUrl        String?
+  
+  foundDate       DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([assetId])
+  @@index([campaignId])
+  @@index([status])
+}
+
+model VerificationPhoto {
+  id              String  @id @default(cuid())
+  session         VerificationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId       String
+  url             String
+  caption         String?
+  uploadedAt      DateTime @default(now())
+
+  @@index([sessionId])
+}
+
+model VerificationGpsLog {
+  id              String  @id @default(cuid())
+  session         VerificationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId       String
+  latitude        Float
+  longitude       Float
+  accuracy        Float?
+  timestamp       DateTime @default(now())
+
+  @@index([sessionId])
+}
+
+// ============================================================================
+// RETAGGING
+// ============================================================================
+
+model RetaggingRequest {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id])
+  assetId         String
+  
+  oldTag          String
+  newTag          String
+  reason          String  // missing_tag, damaged_tag, duplicate_tag, wrong_tag, legacy_numbering
+  
+  status          String  @default("pending") // pending, approved, rejected, completed
+  approvalDate    DateTime?
+  completionDate  DateTime?
+  approvedBy      String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([assetId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// TRANSFERS
+// ============================================================================
+
+model AssetTransfer {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id])
+  assetId         String
+  
+  transferType    String  // department, regional, temporary, permanent
+  fromLocation    String
+  toLocation      String
+  
+  status          String  @default("pending") // pending, approved, in_handover, accepted, completed
+  
+  requestedDate   DateTime @default(now())
+  approvedDate    DateTime?
+  handoverDate    DateTime?
+  completedDate   DateTime?
+  
+  approvedBy      String?
+  receivedBy      String?
+  
+  notes           String?
+
+  @@index([assetId])
+  @@index([status])
+  @@index([transferType])
+  @@index([requestedDate])
+}
+
+// ============================================================================
+// MAINTENANCE
+// ============================================================================
+
+model MaintenanceRecord {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id])
+  assetId         String
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+  supplierId      String
+  
+  maintenanceType String  // preventive, corrective, scheduled, emergency
+  description     String
+  
+  cost            Float
+  workOrderNumber String?
+  technician      String?
+  
+  startDate       DateTime
+  completedDate   DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([assetId])
+  @@index([supplierId])
+  @@index([maintenanceType])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// DEPRECIATION
+// ============================================================================
+
+model DepreciationRecord {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id])
+  assetId         String
+  
+  method          String  // straight_line, reducing_balance
+  depreciationDate DateTime
+  amount          Float
+  accumulatedDepreciation Float
+  bookValue       Float
+  
+  createdAt       DateTime @default(now())
+
+  @@index([assetId])
+  @@index([depreciationDate])
+}
+
+// ============================================================================
+// DISPOSAL
+// ============================================================================
+
+model DisposalRecord {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId         String
+  
+  disposalReason  String  // obsolete, damaged_beyond_repair, lost, sold, donated
+  disposalDate    DateTime
+  
+  status          String  @default("pending") // pending, approved, completed
+  approvalDate    DateTime?
+  certificateUrl  String?
+  
+  notes           String?
+
+  @@index([assetId])
+  @@index([status])
+  @@index([disposalDate])
+}
+
+// ============================================================================
+// MISSING ASSETS
+// ============================================================================
+
+model MissingAssetCase {
+  id              String  @id @default(cuid())
+  asset           Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId         String
+  
+  reportedDate    DateTime @default(now())
+  lastSeenDate    DateTime?
+  lastSeenLocation String?
+  
+  investigationStatus String @default("open") // open, investigating, closed, recovered
+  caseNotes       String?
+  
+  recoveryActions String?
+  findings        String?
+  recommendations String?
+  
+  closedDate      DateTime?
+
+  @@index([assetId])
+  @@index([investigationStatus])
+}
+
+// ============================================================================
+// REPORTS & STATISTICS
+// ============================================================================
+
+model CampaignReport {
+  id              String  @id @default(cuid())
+  campaignId      String
+  reportType      String  // national, county, regional, auditor_performance, missing_assets
+  
+  generatedDate   DateTime @default(now())
+  reportData      String  @db.Text // JSON data
+  
+  @@index([campaignId])
+  @@index([reportType])
+  @@index([generatedDate])
+}
+
+model CampaignStatistic {
+  id              String  @id @default(cuid())
+  campaignId      String
+  
+  totalAssets     Int
+  assetsVerified  Int
+  missingAssets   Int
+  damagedAssets   Int
+  retaggingNeeded Int
+  
+  completionPercentage Float
+  
+  recordedDate    DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([recordedDate])
+}
+
+model AuditorPerformance {
+  id              String  @id @default(cuid())
+  auditorId       String
+  
+  assetsVerified  Int     @default(0)
+  productivity    Float   @default(0)
+  accuracy        Float   @default(0)
+  locationsCovered Int   @default(0)
+  
+  totalAudits     Int     @default(0)
+  completedAudits Int     @default(0)
+  
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@index([auditorId])
+  @@index([updatedAt])
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id              String  @id @default(cuid())
+  recipientId     String
+  type            String  // audit_assignment, transfer_approval, maintenance_due, warranty_expiry, missing_asset, etc.
+  title           String
+  message         String
+  actionUrl       String?
+  
+  status          String  @default("unread") // unread, read, archived
+  channel         String  @default("in_app") // in_app, email, both
+  
+  sentAt          DateTime @default(now())
+  readAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([recipientId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// AUDIT & LOGGING
+// ============================================================================
+
+model ActivityLog {
+  id              String  @id @default(cuid())
+  user            User    @relation(fields: [userId], references: [id])
+  userId          String
+  
+  action          String  // CREATE, UPDATE, DELETE, VIEW, DOWNLOAD, EXPORT, LOGIN, LOGOUT, etc.
+  entityType      String  // Asset, AuditCampaign, User, etc.
+  entityId        String
+  
+  oldValue        String?
+  newValue        String?
+  
+  ipAddress       String?
+  userAgent       String?
+  deviceInfo      String?
+  
+  timestamp       DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([action])
+  @@index([timestamp])
+}
+
+// ============================================================================
+// IMPORT & DATA MIGRATION
+// ============================================================================
+
+model ImportJob {
+  id              String  @id @default(cuid())
+  fileName        String
+  fileSize        Int
+  importType      String  // bulk_assets, migration, data_cleansing
+  
+  status          String  @default("processing") // processing, completed, failed, partial
+  totalRows       Int     @default(0)
+  successRows     Int     @default(0)
+  failedRows      Int     @default(0)
+  
+  validationReport String? @db.Text // JSON validation report
+  errorLog        String? @db.Text  // JSON error log
+  
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// SYSTEM CONFIGURATION
+// ============================================================================
+
+model SystemConfig {
+  id              String  @id @default(cuid())
+  key             String  @unique
+  value           String  @db.Text
+  description     String?
+  dataType        String  // string, number, boolean, json
+  
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@index([key])
+}
