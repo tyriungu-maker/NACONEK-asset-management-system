@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: naconek-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-naconek_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-naconek_secure_password_2024}
+      POSTGRES_DB: ${DB_NAME:-naconek_asset_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    
+    volumes:
+      # Data persistence
+      - postgres_data:/var/lib/postgresql/data
+      
+      # Initial SQL scripts (optional)
+      - ./docker/init-scripts:/docker-entrypoint-initdb.d
+      
+      # Backup volume
+      - postgres_backups:/backups
+    
+    networks:
+      - naconek-network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-naconek_user} -d ${DB_NAME:-naconek_asset_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PgAdmin for Database Management (Optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: naconek-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@naconek.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_password_2024}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    
+    networks:
+      - naconek-network
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
+  postgres_backups:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  naconek-network:
+    driver: bridge
